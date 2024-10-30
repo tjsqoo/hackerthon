@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+<!--    <script src="https://cdn.tiny.cloud/1/no-api-key/tinymce/5/tinymce.min.js" referrerpolicy="origin"></script>-->
+    <script src="https://cdn.tiny.cloud/1/u65bsx09bulbfk84stooepcg313mapir5jwaforug682evso/tinymce/7/tinymce.min.js" referrerpolicy="origin"></script>
+
+    <style>
+        .image-preview {
+            width: 100%;
+            height: 100%;
+            object-fit: fill;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+<div class="container-fluid mt-5">
+    <!-- 로고 영역 -->
+    <div class="container-fluid p-3">
+        <img id="logo" src="flow-logo.svg" alt="Company Logo">
+    </div>
+<!--    <h2 class="text-center">File Upload</h2>-->
+    <form id="uploadForm" enctype="multipart/form-data">
+        <div class="form-group">
+<!--            <label for="file">Choose file to upload</label>-->
+            <input type="file" class="form-control-file" id="file" name="file" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Upload</button>
+    </form>
+    <div id="result" class="mt-3"></div>
+
+    <!-- 추가된 좌우 구분 영역 -->
+    <div class="row mt-5">
+        <!-- 이미지 영역 -->
+        <div class="col-md-6">
+            <h4>Uploaded Image</h4>
+            <img id="uploadedImage" class="image-preview" src="#" height='100%' alt="No Image" style="display: none;">
+        </div>
+        <!-- HTML 문구 영역 -->
+        <div class="col-md-6">
+            <h4>HTML Editor</h4>
+            <textarea id="htmlEditor"></textarea>
+        </div>
+    </div>
+</div>
+
+<script>
+    // TinyMCE 초기화
+    tinymce.init({
+        selector: 'textarea',
+        plugins: [
+            // Core editing features
+            'anchor', 'autolink', 'charmap', 'codesample', 'emoticons', 'image', 'link', 'lists', 'media', 'searchreplace', 'table', 'visualblocks', 'wordcount',
+            // Your account includes a free trial of TinyMCE premium features
+            // Try the most popular premium features until Nov 14, 2024:
+            'checklist', 'mediaembed', 'casechange', 'export', 'formatpainter', 'pageembed', 'a11ychecker', 'tinymcespellchecker', 'permanentpen', 'powerpaste', 'advtable', 'advcode', 'editimage', 'advtemplate', 'ai', 'mentions', 'tinycomments', 'tableofcontents', 'footnotes', 'mergetags', 'autocorrect', 'typography', 'inlinecss', 'markdown',
+            // Early access to document converters
+            'importword', 'exportword', 'exportpdf'
+        ],
+        toolbar: 'undo redo | blocks fontfamily fontsize | bold italic underline strikethrough | link image media table mergetags | addcomment showcomments | spellcheckdialog a11ycheck typography | align lineheight | checklist numlist bullist indent outdent | emoticons charmap | removeformat',
+        tinycomments_mode: 'embedded',
+        tinycomments_author: 'Author name',
+        mergetags_list: [
+            { value: 'First.Name', title: 'First Name' },
+            { value: 'Email', title: 'Email' },
+        ],
+        ai_request: (request, respondWith) => respondWith.string(() => Promise.reject('See docs to implement AI Assistant')),
+        exportpdf_converter_options: { 'format': 'Letter', 'margin_top': '1in', 'margin_right': '1in', 'margin_bottom': '1in', 'margin_left': '1in' },
+        exportword_converter_options: { 'document': { 'size': 'Letter' } },
+        importword_converter_options: { 'formatting': { 'styles': 'inline', 'resets': 'inline',	'defaults': 'inline', } },
+        extended_valid_elements: 'svg[*], text[*], g[*], circle[*], path[*]', // 필요한 SVG 태그와 속성 추가
+        valid_children: '+svg[style|text|g|circle|path]', // SVG 안의 허용 자식 태그
+
+        // 필터링 없이 HTML 유지 설정
+        valid_elements: '*[*]', // 모든 태그와 속성 허용
+
+        // 에디터 초기화 시 문구 설정
+        setup: function (editor) {
+            editor.on('init', function () {
+                editor.getContainer().style.height = '1000px';
+                editor.getContainer().style.width = '100%';
+                editor.setContent('<p>이미지 또는 PDF를 업로드해주세요!!!</p>');
+            });
+        },
+    });
+
+    document.getElementById('uploadForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const formData = new FormData();
+        const fileField = document.getElementById('file');
+
+        formData.append('file', fileField.files[0]);
+
+        try {
+            const response = await fetch('/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            const result = await response.json();
+            document.getElementById('result').innerHTML = `<div class="alert alert-success">${result.message}</div>`;
+
+            // 업로드된 이미지 미리보기
+            const uploadedImage = document.getElementById('uploadedImage');
+            uploadedImage.src = URL.createObjectURL(fileField.files[0]);
+            uploadedImage.style.display = 'block';
+
+            // const convertedText = document.getElementById('htmlContent');
+            // convertedText.appendChild(result.convert.desc);
+            // HTML Content 영역에 내용 추가
+            // const fileType = getFileType(fileField.files[0].name);
+            // document.getElementById('htmlContent').innerHTML += `<p>${result.convert.desc}</p>`;
+
+
+            // HTML Content에 내용 추가
+            console.log(result.convert.desc);
+            tinymce.get('htmlEditor').setContent(result.convert.desc);
+
+
+
+        } catch (error) {
+            document.getElementById('result').innerHTML = `<div class="alert alert-danger">Upload failed</div>`;
+        }
+    });
+</script>
+</body>
+</html>

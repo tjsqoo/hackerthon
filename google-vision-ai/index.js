@@ -1,14 +1,31 @@
 // @google-cloud/vision 라이브러리를 불러옴
 const vision = require('@google-cloud/vision');
+const pdf = require('pdf-poppler');
+
 const express = require('express');
 const { google } = require('googleapis');
+
 const bodyParser = require('body-parser');
 const fs = require('fs');
 const path = require('path');
 
+// express config
 const app = express();
 app.use(bodyParser.json());
 app.use(express.static('public'));
+
+// file uploader config
+const multer = require('multer');
+const storage = multer.diskStorage({
+    destination: (req, file, cb) => {
+        cb(null, 'public/origin/'); // 업로드할 디렉터리
+    },
+    filename: (req, file, cb) => {
+        cb(null, Date.now() + path.extname(file.originalname)); // 파일명 설정
+    }
+});
+const upload = multer({ storage: storage });
+
 
 const SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 'https://www.googleapis.com/auth/gmail.send'];
 const TOKEN_PATH = path.join(__dirname, 'token.json');
@@ -28,7 +45,7 @@ async function authorize(res) {
             access_type: 'offline',
             scope: SCOPES,
         });
-        console.log('Authorize this app by visiting this url:', authUrl);
+        //console.log('Authorize this app by visiting this url:', authUrl);
         res.redirect(authUrl);
     }
     return oAuth2Client;
@@ -47,96 +64,152 @@ app.get('/oauth2callback', async (req, res) => {
 });
 
 // Route for the home page
-app.get('/', (req, res) => {
+app.get('/', async (req, res) => {
     // 실행: 이미지 파일 경로를 전달하여 OCR 수행
-    // const imagePath = 'test.png'; // 이미지 파일 경로 설정
-    // detectText(imagePath, res);
-    // res.json({message: 'ocr ok'});
+    const originFilePath = 'test.pdf'; // 이미지 파일 경로 설정
+    let result = '';
+    let isImage = false;
+    if (isImage) {
+        const htmlText = await detectText(originFilePath);
+        // const htmlText = await documentTextDetection(originFilePath);
+        console.log(JSON.stringify(htmlText));
+        result = ocrToSvg(htmlText);
+        // result = generateHtmlCss(htmlText);
+    } else {
+        // 1. PDF를 이미지로 변환
+        const imagePaths = await convertPdfToImages(originFilePath);
+        console.log(imagePaths);
+        // 2. 각 이미지 파일에 대해 텍스트 분석 및 HTML 생성
+        for (const imagePath of imagePaths) {
+            const htmlText = await detectText(imagePath);
+            const htmlCssResult = ocrToSvg(htmlText);
+            // const htmlCssResult = generateHtmlCss(htmlText);
+            result += htmlCssResult + "\n";
+        }
+    }
 
-    res.send(`
-    <!DOCTYPE html>
-    <html lang="ko">
-    <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <title>Node.js에서 Tesseract.js 사용하기</title>
-      <style>
-        body {
-          font-family: Arial, sans-serif;
-          line-height: 1.6;
-        }
-        code {
-          background-color: #f5f5f5;
-          padding: 2px 4px;
-          border-radius: 4px;
-          font-size: 0.9em;
-        }
-        pre {
-          background-color: #f5f5f5;
-          padding: 10px;
-          border-radius: 4px;
-          font-size: 0.9em;
-          overflow-x: auto;
-        }
-        h2 {
-          border-bottom: 2px solid #ddd;
-          padding-bottom: 5px;
-        }
-        .code-copy {
-          text-align: right;
-          font-size: 0.8em;
-          color: #007bff;
-          cursor: pointer;
-        }
-      </style>
-    </head>
-    <body>
-      <h2>Node.js에서 <code>tesseract.js</code> 사용 예시</h2>
-      <p>네, Node.js 환경에서도 Tesseract와 같은 OCR 기능을 사용할 수 있는 여러 모듈이 존재합니다. 가장 대표적인 것이 <strong>tesseract.js</strong>입니다. 이는 브라우저와 Node.js에서 모두 사용할 수 있는 Tesseract의 JavaScript 포팅 버전입니다.</p>
-
-      <h3><code>tesseract.js</code>의 주요 특징:</h3>
-      <ul>
-        <li><strong>오픈 소스:</strong> 무료로 사용할 수 있으며, Node.js뿐만 아니라 브라우저에서도 사용 가능.</li>
-        <li><strong>다국어 지원:</strong> Tesseract 엔진을 기반으로 하여 여러 언어의 텍스트를 인식 가능.</li>
-        <li><strong>워커 기반:</strong> 여러 코어를 사용하여 병렬로 작업을 수행할 수 있어 속도를 개선.</li>
-      </ul>
-
-      <h3>1. 설치:</h3>
-      <pre><code>npm install tesseract.js</code></pre>
-
-      <h3>2. 기본 사용법:</h3>
-      <pre><code>const Tesseract = require('tesseract.js');
-Tesseract.recognize(
-  'path_to_image.jpg',
-  'eng', // 언어 설정 (예: 영어)
-  {
-    logger: info => console.log(info) // 진행 상황 로깅
-  }
-).then(({ data: { text } }) => {
-  console.log(text);
+    res.send(result);
 });
-</code></pre>
 
-      <div class="code-copy">코드 복사</div>
-
-      <h2>추가적인 Node.js OCR 모듈</h2>
-      <h3>1. <code>node-tesseract-ocr</code>:</h3>
-      <ul>
-        <li><code>tesseract.js</code>와 유사하지만, <strong>Tesseract의 CLI(명령줄 인터페이스)</strong>를 Node.js 환경에서 호출하는 방식으로 동작합니다.</li>
-        <li>Tesseract 엔진을 시스템에 설치해야 하며, 이를 통해 높은 정확도의 OCR 처리가 가능합니다.</li>
-      </ul>
-    </body>
-    </html>
-  `);
+// 파일 업로드 엔드포인트
+app.post('/upload', upload.single('file'), async (req, res) => {
+    if (req.file) {
+        const result = await convert(req.file.filename, req.file.path);
+        res.json({message: '파일 업로드 성공!', file: req.file, convert: result});
+    } else {
+        res.status(400).json({message: '파일 업로드 실패'});
+    }
 });
+
+async function convert(fileName, originFilePath) {
+
+    let result;
+
+    try {
+        const fileType = getFileType(fileName);
+        switch (fileType) {
+            case 'image': {
+                // text 추출
+                const htmlText = await detectText(originFilePath);
+                // svg 생성
+                // let convertedResult = ocrToSvg(htmlText);
+                let convertedResult = generateHtmlCss(htmlText);
+
+                result = {
+                    success: true,
+                    desc: convertedResult
+                };
+            }
+                break;
+            case 'pdf': {
+                const imagePaths = await convertPdfToImages(originFilePath);
+                let convertedResult = '';
+                for (const imagePath of imagePaths) {
+                    // text 추출
+                    const htmlText = await detectText(imagePath);
+                    // svg 생성
+                    // const htmlCssResult = ocrToSvg(htmlText);
+                    const htmlCssResult = generateHtmlCss(htmlText);
+
+                    convertedResult += htmlCssResult + "\n";
+                }
+
+                result = {
+                    success: true,
+                    desc: convertedResult,
+                    path: imagePaths
+                };
+            }
+                break;
+            case 'etc': {
+                result = {
+                    success: false,
+                    desc: 'This file type is not supported.'
+                };
+            }
+                break;
+            default: {
+                result = {
+                    success: false,
+                    desc: 'This file type is not supported.'
+                };
+            }
+        }
+    } catch (e) {
+        console.error(e);
+    } finally {
+
+    }
+    return result;
+}
+
+// OCR을 이용해 문서에서 추출하는 함수
+async function documentTextDetection(imagePath, res) {
+    const visionClient = new vision.ImageAnnotatorClient({
+        keyFilename: path.join(__dirname, 'credentials.json') // 서비스 계정 키 파일 경로
+    });
+
+    let ocrResult = 'good';
+    try {
+        // 이미지를 Vision API로 분석
+        const [result] = await visionClient.documentTextDetection(imagePath);
+        const textAnnotations = result.textAnnotations;
+        const text = textAnnotations[0].description;
+        console.log("Extracted Text:\n", text);
+
+        // 각 텍스트 위치 정보를 기반으로 HTML로 변환
+        let htmlContent = "<html><body><table style='border:1px solid black'>";
+
+        for (let i = 1; i < textAnnotations.length; i++) {
+            const annotation = textAnnotations[i];
+            const vertices = annotation.boundingPoly.vertices;
+            const cellText = annotation.description;
+
+            // 각 셀의 위치에 맞춰 HTML 테이블의 셀을 구성
+            htmlContent += `<tr><td style="border:1px solid black; position: absolute; top: ${vertices[0].y}px; left: ${vertices[0].x}px;">${cellText}</td></tr>`;
+        }
+
+        htmlContent += "</table></body></html>";
+
+        // 결과 HTML 저장
+        fs.writeFileSync('output.html', htmlContent);
+        console.log("HTML output saved as output.html");
+    } catch (err) {
+        console.error('OCR 처리 중 오류 발생:', err);
+    } finally {
+
+    }
+
+    return ocrResult;
+}
 
 // OCR을 이용해 이미지에서 텍스트를 추출하는 함수
-async function detectText(imagePath, res) {
+async function detectText(imagePath) {
     // Google Cloud Vision API 클라이언트 생성
-    const oAuth2Client = await authorize(res);
-    console.log(oAuth2Client);
+    // const oAuth2Client = await authorize(res);
+    // console.log(oAuth2Client);
     const visionClient = new vision.ImageAnnotatorClient({
-        keyFilename: path.join(__dirname, 'organic-lacing-439206-q9-2fe3f14763d5.json') // 서비스 계정 키 파일 경로
+        keyFilename: path.join(__dirname, 'credentials.json') // 서비스 계정 키 파일 경로
     });
     //
     // const visionClient = new vision.ImageAnnotatorClient({
@@ -146,21 +219,152 @@ async function detectText(imagePath, res) {
     let ocrResult;
     try {
         // 이미지를 Vision API로 분석
-        const [result] = await visionClient.textDetection(imagePath);
+        const [result] = await visionClient.documentTextDetection(imagePath);
+        // console.log(result);
         const detections = result.textAnnotations;
 
-        if (detections.length > 0) {
-            console.log('텍스트 감지됨:');
-            console.log(detections[0].description); // 이미지에서 추출된 텍스트 출력
-            ocrResult = detections[0].description;
-        } else {
-            console.log('텍스트가 감지되지 않았습니다.');
-            ocrResult('텍스트가 감지되지 않았습니다.');
-        }
+        // if (detections.length > 0) {
+        //     console.log(detections); // 이미지에서 추출된 텍스트 출력
+        // }
+
+        // 첫 번째 항목은 전체 텍스트, 이후 항목들은 각 단어 정보
+        ocrResult = detections.slice(1).map(annotation => ({
+            text: annotation.description,
+            bounds: annotation.boundingPoly.vertices,
+        }));
     } catch (err) {
         console.error('OCR 처리 중 오류 발생:', err);
     } finally {
-        res.send(ocrResult);
+
+    }
+
+    return ocrResult;
+}
+
+// PDF를 이미지로 변환하는 함수
+async function convertPdfToImages(pdfPath) {
+    let imagePaths;
+    try {
+        const outputDir = path.dirname(pdfPath);
+        const options = {
+            format: 'png',
+            out_dir: outputDir,
+            out_prefix: path.basename(pdfPath, path.extname(pdfPath)),
+            page: null, // 모든 페이지를 변환합니다.
+        };
+
+        await pdf.convert(pdfPath, options);
+        imagePaths = fs.readdirSync(outputDir)
+            .filter(file => file.startsWith(options.out_prefix) && file.endsWith('.png'))
+            .map(file => path.join(outputDir, file));
+
+    } catch(e) {
+        console.error(e);
+    }
+
+    return imagePaths;
+}
+
+
+// HTML/CSS 생성 함수
+function generateHtmlCss(textData) {
+    let htmlContent = `<div style="position: relative; width: 100%; height: auto;">\n`;
+
+    textData.forEach(({ text, bounds }) => {
+        const [p1, , p3] = bounds;  // 좌상단(p1)과 우하단(p3) 좌표
+        const width = p3.x - p1.x;
+        const height = p3.y - p1.y;
+
+        htmlContent += `
+      <div style="
+        position: absolute;
+        top: ${p1.y}px;
+        left: ${p1.x}px;
+        width: ${width}px;
+        height: ${height}px;
+        font-size: ${Math.round(height * 0.8)}px;
+        overflow: hidden;
+        white-space: nowrap;
+      ">
+        ${text}
+      </div>\n`;
+    });
+
+    htmlContent += `</div>`;
+    return htmlContent;
+}
+
+// OCR 데이터를 SVG로 변환하는 Node.js 함수
+function ocrToSvg(ocrData, svgWidth = '100%', svgHeight = '100%') {
+    // SVG 초기화
+    let svg = `<svg width="${svgWidth}" height="${svgHeight}" xmlns="http://www.w3.org/2000/svg">\n`;
+
+    // OCR 데이터를 순회하여 각 텍스트를 SVG로 변환
+    ocrData.forEach(item => {
+        const { text, bounds } = item;
+        if (bounds && bounds.length >= 2) {
+            // 좌표 계산 (왼쪽 상단과 오른쪽 하단 좌표를 사용)
+            const x = bounds[0].x;
+            const y = bounds[0].y;
+
+            // SVG <text> 요소 생성
+            svg += `  <text x="${x}" y="${y}" font-size="10" font-family="Arial">${text}</text>\n`;
+        }
+    });
+
+    // SVG 종료 태그
+    svg += `</svg>`;
+
+    return svg;
+}
+
+// OpenAI API 호출 함수
+async function getHtmlFromText(text) {
+    const prompt = `
+  Convert the following text into HTML tags:
+  ${text}
+  `;
+
+    const response = await openai.createCompletion({
+        model: 'text-davinci-003',  // 원하는 모델을 선택하세요.
+        prompt: prompt,
+        max_tokens: 500,
+    });
+
+    return response.data.choices[0].text.trim();
+}
+
+// 메인 함수
+async function processImage(imagePath) {
+    try {
+        // 1. 이미지에서 텍스트 추출
+        const extractedText = await extractTextFromImage(imagePath);
+        console.log("Extracted Text:", extractedText);
+
+        // 2. OpenAI에 HTML 형식 요청
+        const htmlResult = await getHtmlFromText(extractedText);
+        console.log("HTML Result:", htmlResult);
+
+    } catch (error) {
+        console.error("Error processing image:", error);
+    }
+}
+
+// 파일 유형을 구분하는 함수
+function getFileType(filename) {
+    // 확장자를 소문자로 변환해서 가져옴
+    const ext = path.extname(filename).toLowerCase();
+
+    // 파일 유형별 확장자 목록
+    const imageExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp', '.svg'];
+    const pdfExtension = '.pdf';
+
+    if (imageExtensions.includes(ext)) {
+        return 'image';
+    } else if (ext === pdfExtension) {
+        return 'pdf';
+    } else {
+        return 'etc';
     }
 }
 
