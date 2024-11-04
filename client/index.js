@@ -27,26 +27,54 @@ async function authorize(res) {
             access_type: 'offline',
             scope: SCOPES,
         });
-        console.log('Authorize this app by visiting this url:', authUrl);
+        // console.log('Authorize this app by visiting this url:', authUrl);
         res.redirect(authUrl);
     }
     return oAuth2Client;
 }
+app.get('/oauth', async (req, res) => {
+    authorize(res);
+});
 
 // Save the token after the user authorizes
 app.get('/oauth2callback', async (req, res) => {
     const code = req.query.code;
+    console.log(code);
     const oAuth2Client = await authorize(res);
 
     const { tokens } = await oAuth2Client.getToken(code);
     oAuth2Client.setCredentials(tokens);
     fs.writeFileSync(TOKEN_PATH, JSON.stringify(tokens));
 
-    res.send('Authorization complete, you can close this window.');
+    res.redirect('/');
 });
 
 // List Gmail messages
 app.get('/emails', async (req, res) => {
+    // const oAuth2Client = await authorize(res);
+    // const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
+    //
+    // const response = await gmail.users.messages.list({
+    //     userId: 'me',
+    //     maxResults: 10,
+    // });
+    //
+    // const messages = await Promise.all(
+    //     response.data.messages.map(async (message) => {
+    //         const msg = await gmail.users.messages.get({ userId: 'me', id: message.id });
+    //         console.log(msg);
+    //         return {
+    //             id: message.id,
+    //             subject: msg.data.payload.headers.find((h) => h.name === 'Subject').value,
+    //             from: msg.data.payload.headers.find((h) => h.name === 'From').value,
+    //             snippet: msg.data.snippet,
+    //             body: msg.data.payload.parts ? msg.data.payload.parts[0].body.data : '',
+    //             date: msg.data.internalDate,
+    //         };
+    //     })
+    // );
+    //
+    // res.json(messages);
     const oAuth2Client = await authorize(res);
     const gmail = google.gmail({ version: 'v1', auth: oAuth2Client });
 
@@ -55,10 +83,15 @@ app.get('/emails', async (req, res) => {
         maxResults: 10,
     });
 
+    // 이메일을 스레드 단위로 그룹화할 객체
+    const threads = {};
+
     const messages = await Promise.all(
         response.data.messages.map(async (message) => {
             const msg = await gmail.users.messages.get({ userId: 'me', id: message.id });
-            return {
+
+            const threadId = msg.data.threadId;
+            const emailData = {
                 id: message.id,
                 subject: msg.data.payload.headers.find((h) => h.name === 'Subject').value,
                 from: msg.data.payload.headers.find((h) => h.name === 'From').value,
@@ -66,10 +99,26 @@ app.get('/emails', async (req, res) => {
                 body: msg.data.payload.parts ? msg.data.payload.parts[0].body.data : '',
                 date: msg.data.internalDate,
             };
+
+            // 같은 threadId로 그룹화
+            if (!threads[threadId]) {
+                threads[threadId] = {
+                    threadId,
+                    messages: []
+                };
+            }
+
+            threads[threadId].messages.push(emailData);
+            // 오름차순 정렬 (과거 -> 최근)
+            threads[threadId].messages.sort((a, b) => a.date - b.date);
+            console.log(threads[threadId].messages);
+            // threads[threadId].messages.reverse();
         })
     );
 
-    res.json(messages);
+    // 클라이언트로 각 스레드를 배열 형태로 응답
+    res.json(Object.values(threads));
+
 });
 
 // Send a reply to a ticket (email)
@@ -83,8 +132,8 @@ app.post('/send-reply', async (req, res) => {
         service: 'gmail',
         auth: {
             // type: 'OAuth2',
-            user: 'tjsqoo@gmail.com', // Replace with your email
-            pass: 'jbhfqgxlfdvxvxyq',
+            user: 'xdea123@flow.team', // Replace with your email
+            pass: '@@@@@@@@@@@@@@',
             // clientId: oAuth2Client._clientId,
             // clientSecret: oAuth2Client._clientSecret,
             // refreshToken: oAuth2Client.credentials.refresh_token,
@@ -93,7 +142,7 @@ app.post('/send-reply', async (req, res) => {
     });
 
     const mailOptions = {
-        from: 'tjsqoo@gmail.com',
+        from: 'xdea123@flow.team',
         to: to,
         subject: subject,
         text: text,
@@ -101,7 +150,7 @@ app.post('/send-reply', async (req, res) => {
 
     await transporter.sendMail(mailOptions, (error, info) => {
         if (error) {
-            console.log(error);
+            console.error(error);
             return res.status(500).json({error: error.message});
         }
         res.json({message: 'Reply sent', info});
@@ -156,7 +205,7 @@ app.post('/send-reply-all', async (req, res) => {
 
     await transporter.sendMail(mailOptions, (error, info) => {
         if (error) {
-            console.log(error);
+            console.error(error);
             return res.status(500).json({error: error.message});
         }
         res.json({message: 'Reply sent', info});

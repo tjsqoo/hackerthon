@@ -308,7 +308,7 @@ function ocrToSvg(ocrData, svgWidth = '100%', svgHeight = '100%') {
             const y = bounds[0].y;
 
             // SVG <text> 요소 생성
-            svg += `  <text x="${x}" y="${y}" font-size="10" font-family="Arial">${text}</text>\n`;
+            svg += `  <text x="${x}" y="${y}" font-size="16" font-family="Arial">${text}</text>\n`;
         }
     });
 
