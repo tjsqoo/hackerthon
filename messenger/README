@@ -1,0 +1,16 @@
+your-messenger-project/
+├── server/
+│   └── index.js      # 기존 Node.js Socket.IO 서버 (Redis 연동)
+├── client/
+│   ├── public/
+│   │   └── favicon.ico
+│   ├── pages/
+│   │   └── index.js  # Next.js 메인 페이지 (채팅 클라이언트)
+│   ├── components/
+│   │   └── ChatWindow.js # 채팅 UI 컴포넌트
+│   ├── styles/
+│   │   └── Home.module.css
+│   ├── .env.local    # 환경 변수 (예: SOCKET_SERVER_URL)
+│   ├── package.json
+│   └── next.config.js
+└── package.json      # 모노레포를 위한 상위 package.json (선택 사항)
