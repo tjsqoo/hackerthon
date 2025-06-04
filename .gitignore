@@ -9,3 +9,4 @@ google-vision-ai/public/origin/*
 
 
 !/.gitignore
+!.vscode/
