@@ -52,6 +52,18 @@ export default function Home() {
       addMessageToChat(msg);
     });
 
+    // 초기 메시지 수신 (방 참여 시)
+    newSocket.on('initial_messages', (initialMsgs) => {
+      console.log('초기 메시지 수신:', initialMsgs);
+      setMessages(initialMsgs); // 기존 메시지를 초기 메시지로 교체
+      // 스크롤을 최하단으로 이동 (initial_messages 로드 후)
+      setTimeout(() => {
+        if (chatContainerRef.current) {
+          chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+        }
+      }, 0);
+    });
+
     newSocket.on('disconnect', () => {
       console.log('서버와의 연결이 끊어졌습니다.');
       addMessageToChat('[SERVER] 서버와의 연결이 끊어졌습니다.');

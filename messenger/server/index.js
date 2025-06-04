@@ -1,11 +1,14 @@
 // server/index.js
 
+require('dotenv').config(); // .env 파일 로드
 const http = require('http');
 const { Server } = require('socket.io');
 const { createClient } = require('redis');
 const { createAdapter } = require('@socket.io/redis-adapter');
 const app = require('./app'); // Express 앱을 모듈로 가져옴
 const configureSocketIO = require('./socket'); // Socket.IO 설정 모듈
+const { connectDB } = require('./config/db'); // MongoDB 연결 함수 가져오기
+
 
 const PORT = process.env.PORT || 4000; // Next.js와 포트 충돌 방지
 
@@ -15,14 +18,14 @@ const server = http.createServer(app); // Express 앱을 HTTP 서버에 연결
 const pubClient = createClient({ url: 'redis://localhost:6379' });
 const subClient = pubClient.duplicate();
 
-Promise.all([pubClient.connect(), subClient.connect()])
+Promise.all([pubClient.connect(), subClient.connect(), connectDB()])
   .then(() => {
     console.log('Redis 클라이언트가 성공적으로 연결되었습니다.');
 
     // --- Socket.IO 설정 및 Redis 어댑터 연결 ---
     const io = new Server(server, {
       cors: {
-        origin: "*", // Next.js 클라이언트 Origin
+        origin: process.env.CLIENT_URL || "http://127.0.0.1:3000", // Next.js 클라이언트 Origin
         methods: ["GET", "POST"]
       }
     });

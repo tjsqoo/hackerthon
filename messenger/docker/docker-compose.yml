@@ -1,0 +1,65 @@
+# docker-compose.yml
+
+version: '3.8' # Docker Compose 파일 형식 버전
+
+services:
+  mongodb: # MongoDB 서비스 정의
+    image: mongo:latest # 최신 MongoDB 이미지 사용
+    container_name: mongodb_container
+    ports:
+      - "27017:27017" # 호스트 포트 27017을 컨테이너 포트 27017에 매핑
+    volumes:
+      - mongodb_data:/data/db # 데이터 지속성을 위한 볼륨 마운트
+    environment: # 환경 변수 설정 (선택 사항, 사용자/비밀번호 등)
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: password
+    restart: always # 컨테이너 종료 시 항상 재시작
+
+  redis: # Redis 서비스 정의
+    image: redis:latest
+    container_name: redis_container
+    ports:
+      - "6379:6379" # 호스트 포트 6379를 컨테이너 포트 6379에 매핑
+    volumes:
+      - redis_data:/data # 데이터 지속성을 위한 볼륨 마운트
+    restart: always
+
+  backend: # Node.js 백엔드 서비스 정의
+    build:
+      context: ./server # server 디렉토리에서 Dockerfile을 빌드
+      dockerfile: Dockerfile # server 디렉토리 안의 Dockerfile 사용
+    container_name: backend_container
+    ports:
+      - "4000:4000" # 호스트 포트 4000을 컨테이너 포트 4000에 매핑
+    volumes:
+      - ./server:/app # 소스 코드 마운트 (개발 중 코드 변경 시 컨테이너 내부 반영)
+      - /app/node_modules # node_modules는 호스트에서 마운트하지 않음 (컨테이너 내부에서 관리)
+    environment: # 백엔드 서비스에서 사용할 환경 변수
+      PORT: 4000
+      MONGO_URI: mongodb://admin:password@mongodb:27017/messenger_chat?authSource=admin # Docker Compose 내부 네트워크 이름 사용
+      REDIS_URL: redis://redis:6379
+      CLIENT_URL: http://localhost:3000
+    depends_on: # mongodb와 redis가 먼저 시작되도록 의존성 설정
+      - mongodb
+      - redis
+    restart: always
+
+  # frontend: # Next.js 프론트엔드 서비스 (선택 사항, 개발 중에는 로컬 실행 권장)
+  #   build:
+  #     context: ./client
+  #     dockerfile: Dockerfile # client 디렉토리 안의 Dockerfile 사용
+  #   container_name: frontend_container
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./client:/app
+  #     - /app/node_modules
+  #   environment:
+  #     NEXT_PUBLIC_SOCKET_SERVER_URL: http://backend:4000 # Docker Compose 내부 네트워크 이름 사용
+  #   depends_on:
+  #     - backend
+  #   restart: always
+
+volumes: # 볼륨 정의 (데이터 지속성 유지)
+  mongodb_data:
+  redis_data:

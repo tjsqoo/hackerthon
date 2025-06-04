@@ -21,12 +21,12 @@ app.use(express.static(path.join(__dirname, 'public')));
 // 각 기능별 라우터 모듈을 가져와 연결
 // const authRoutes = require('./routes/auth');
 // const userRoutes = require('./routes/users');
-// const messageRoutes = require('./routes/messages');
+const messageRoutes = require('./routes/messages');
 // const calendarRoutes = require('./routes/calendar');
 
 // app.use('/api/auth', authRoutes); // /api/auth/login, /api/auth/register 등
 // app.use('/api/users', userRoutes); // /api/users/profile, /api/users/{id} 등
-// app.use('/api/messages', messageRoutes); // /api/messages/history, /api/messages/send (비실시간) 등
+app.use('/api/messages', messageRoutes); // /api/messages/history, /api/messages/send (비실시간) 등
 // app.use('/api/calendar', calendarRoutes); // /api/calendar/events, /api/calendar/add-event 등
 
 // 기본 라우트 (선택 사항)
