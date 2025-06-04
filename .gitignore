@@ -1,8 +1,11 @@
-.idea/*
 pids
 node_modules
 credentials.json
 token.json
 google-vision-ai/public/convert/*
 google-vision-ai/public/origin/*
-.next
+.*
+
+
+
+!/.gitignore
